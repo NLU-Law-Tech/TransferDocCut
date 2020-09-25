@@ -94,9 +94,11 @@ def find_fullname_law(text, law_all_positions):
         for paragraph_key, paragraph_value in paragraph_positions_dict.items():
             for article_key, article_value in article_positions_dict.items():
                 if paragraph_key < subparagraph_key:
-                    temp_fullname = paragraph_value+subparagraph_value
+                    temp_fullname_law = paragraph_value+subparagraph_value
+                    del subparagraph_positions_dict[subparagraph_key]
                     if article_key < paragraph_key:
-                        temp_fullname = article_value+temp_fullname
+                        temp_fullname_law = article_value+temp_fullname_law
+                        del paragraph_positions_dict[paragraph_key]
 
     print()
 
