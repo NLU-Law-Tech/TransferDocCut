@@ -1,6 +1,7 @@
 import re
 from TransferDocCut.find_laws import find_laws
-from TransferDocCut.find_laws import get_all_laws_list 
+from TransferDocCut.find_laws import get_all_laws_list
+
 
 def match_name_and_law(text, name_list, break_line='\r\n'):
     # 取出執掌法條
@@ -14,35 +15,38 @@ def match_name_and_law(text, name_list, break_line='\r\n'):
         name_and_law[name] = []
         name_all_positions[name] = []
     for focus_law in focus_laws_list:
-        law_all_positions[focus_law]=[]
+        law_all_positions[focus_law] = []
 
     # 清洗Text
     text = clean_text(text, break_line)
     # 找出被告跟foucus_law在Text所有的位置
-    name_all_positions=find_string_all_positions(text, name_list, name_all_positions)
-    law_all_positions = find_string_all_positions(text, focus_laws_list, law_all_positions)
+    name_all_positions = find_string_all_positions(
+        text, name_list, name_all_positions)
+    law_all_positions = find_string_all_positions(
+        text, focus_laws_list, law_all_positions)
     find_fullname_law(text, law_all_positions)
     # 所有的位置
-    all_positions_dict, all_positions_list = find_all_positions_dict_and_list(name_all_positions, law_all_positions)
-    
-    temp_name_list=[]
-    temp_law_list=[]
-    last_flag=""
-    current_flag=""
-    for i,position in enumerate(all_positions_list):
+    all_positions_dict, all_positions_list = find_all_positions_dict_and_list(
+        name_all_positions, law_all_positions)
+
+    temp_name_list = []
+    temp_law_list = []
+    last_flag = ""
+    current_flag = ""
+    for i, position in enumerate(all_positions_list):
         # 紀錄目前的是找被告還是法條
         current_flag = get_key(all_positions_dict, position)
 
         # 如果是找被告而且上一個flag不是法條
-        if current_flag == "name" and last_flag!="law":
-            name=get_key(name_all_positions, position)
+        if current_flag == "name" and last_flag != "law":
+            name = get_key(name_all_positions, position)
             temp_name_list.append(name)
         elif current_flag == "law":
             law = get_key(law_all_positions, position)
             temp_law_list.append(law)
-        
+
         # 如果上一個是法條，現在是被告的話，要把法條加進來
-        if (last_flag == "law" and current_flag == "name") or(i+1 == len(all_positions_list)):
+        if (last_flag == "law" and current_flag == "name") or (i+1 == len(all_positions_list)):
             for temp_name in temp_name_list:
                 for temp_law in temp_law_list:
                     name_and_law[temp_name].append(temp_law)
@@ -51,11 +55,10 @@ def match_name_and_law(text, name_list, break_line='\r\n'):
             temp_law_list.clear()
             name = get_key(name_all_positions, position)
             temp_name_list.append(name)
-        
-        # 紀錄flag 
+
+        # 紀錄flag
         last_flag = current_flag
-            
-        
+
     # 以逗號分割
     # SFact_list = SFact.split("，")
     # for name in name_list:
@@ -78,29 +81,48 @@ def match_name_and_law(text, name_list, break_line='\r\n'):
 # 用來找完整的法條(包含款、項、條)
 def find_fullname_law(text, law_all_positions):
 
-
-    regex_subparagraph="第\d*款"
-    regex_paragraph="第\d*項"
+    regex_subparagraph = "第\d*款"
+    regex_paragraph = "第\d*項"
     regex_article = "第\d*條"
-    subparagraph_positions_dict = find_article_paragraph_subparagraph_positions(
+    # key , value 轉換
+    law_all_positions_dict = {}
+    law_all_positions_dict = exchange_key_value(law_all_positions)
+    # 取出法律名稱的位置並大到小排列(從後往前排列)
+    law_all_positions_list = sorted(law_all_positions_dict, reverse=True)
+    subparagraph_positions_dict, subparagraph_all_positions_list = find_article_paragraph_subparagraph_positions(
         text, regex_subparagraph)
-    paragraph_positions_dict = find_article_paragraph_subparagraph_positions(
+    paragraph_positions_dict, paragraph_all_positions_list = find_article_paragraph_subparagraph_positions(
         text, regex_paragraph)
-    article_positions_dict = find_article_paragraph_subparagraph_positions(
+    article_positions_dict, article_all_positions_list = find_article_paragraph_subparagraph_positions(
         text, regex_article)
     # 用款找到對應的項
-    # key 是位置 
-    for subparagraph_key, subparagraph_value in subparagraph_positions_dict.items():
-        for paragraph_key, paragraph_value in paragraph_positions_dict.items():
-            for article_key, article_value in article_positions_dict.items():
-                if paragraph_key < subparagraph_key:
-                    temp_fullname_law = paragraph_value+subparagraph_value
-                    del subparagraph_positions_dict[subparagraph_key]
-                    if article_key < paragraph_key:
-                        temp_fullname_law = article_value+temp_fullname_law
-                        del paragraph_positions_dict[paragraph_key]
-
+    # key 是位置
+    for law_position in law_all_positions_list:
+        # 條
+        try:
+            for article_position in article_all_positions_list:
+                # 項
+                for paragraph_position in paragraph_all_positions_list:
+                    # 款
+                    subparagraph_count = 0
+                    for subparagraph_position in subparagraph_all_positions_list:
+                        subparagraph_count += 1
+                        if paragraph_position < subparagraph_position:
+                            temp_fullname_law=subparagraph_positions_dict[paragraph_position]+subparagraph_positions_dict[subparagraph_position]
+                            
+                        if subparagraph_count == len(subparagraph_all_positions_list):
+                            raise getoutofloop
+        except getoutofloop:
+            pass
     print()
+
+
+def exchange_key_value(a_dict):
+    exchanged_dict = {}
+    for key, value_list in a_dict.items():
+        for value in value_list:
+            exchanged_dict[value] = key
+    return exchanged_dict
 
 
 def find_SPA(law, text, law_position_start, break_line='\r\n'):
@@ -184,6 +206,8 @@ def backspace_SP(regex_str, law):
         return law[:regex_position.start()]
 
 # 資料清洗
+
+
 def clean_text(text, break_line='\r\n'):
     # 去空白  去換行符號
     clean_text = re.sub(break_line, "", re.sub(r"\s+", "", text))
@@ -233,30 +257,33 @@ def find_string_all_positions(text, string_list, string_dict):
         string_all_match_positions = re.finditer(string, text)
         for string_match_position in string_all_match_positions:
             string_dict[string].append(string_match_position.start())
-    
-    #空的都不要
+
+    # 空的都不要
     copy_string_dict = string_dict.copy()
     for i in copy_string_dict.items():
-        if len(i[1])==0:
+        if len(i[1]) == 0:
             del string_dict[i[0]]
     return string_dict
 
 # 找條項款的位置(包含同條、同項)
-def find_article_paragraph_subparagraph_positions(text,regex_str):
-    regex_positions_dict={}
+
+
+def find_article_paragraph_subparagraph_positions(text, regex_str):
+    regex_positions_dict = {}
     regex_positions = re.finditer(regex_str, text)
     for regex_position in regex_positions:
         # 位置當key
         regex_positions_dict[regex_position.start()] = regex_position[0]
-
-    return regex_positions_dict
+    # 再回傳由大到小的位置(由後往前)
+    all_positions_list = sorted(regex_positions_dict, reverse=True)
+    return regex_positions_dict, all_positions_list
 
 
 def find_all_positions_dict_and_list(name_all_positions, law_all_positions):
-    all_positions_dict={}
-    all_positions_dict["name"]=[]
-    all_positions_dict["law"]=[]
-    all_positions_list=[]
+    all_positions_dict = {}
+    all_positions_dict["name"] = []
+    all_positions_dict["law"] = []
+    all_positions_list = []
     for name, position_list in name_all_positions.items():
         all_positions_dict["name"].extend(position_list)
         all_positions_list.extend(position_list)
@@ -268,7 +295,11 @@ def find_all_positions_dict_and_list(name_all_positions, law_all_positions):
     return all_positions_dict, all_positions_list
 
 
-def get_key(dict,value):
+def get_key(dict, value):
     for k, v_list in dict.items():
         if value in v_list:
             return k
+
+
+class getoutofloop(Exception):
+    pass
