@@ -9,55 +9,69 @@ def match_name_and_law(text, name_list, break_line='\r\n'):
 
     # init object for each person
     name_and_law = {}
-    name_all_positions = {}
-    law_all_positions = {}
+    all_name_positions = {}
+    all_law_positions = {}
     for name in name_list:
         name_and_law[name] = []
-        name_all_positions[name] = []
+        all_name_positions[name] = []
     for focus_law in focus_laws_list:
-        law_all_positions[focus_law] = []
+        all_law_positions[focus_law] = []
 
     # 清洗Text
     text = clean_text(text, break_line)
     # 找出被告跟foucus_law在Text所有的位置
-    name_all_positions = find_string_all_positions(
-        text, name_list, name_all_positions)
-    law_all_positions = find_string_all_positions(
-        text, focus_laws_list, law_all_positions)
-    find_fullname_law(text, law_all_positions)
+    all_name_positions = find_string_all_positions(
+        text, name_list, all_name_positions)
+    all_law_positions = find_string_all_positions(
+        text, focus_laws_list, all_law_positions)
+    fullname_law_dict=find_fullname_law(text, all_law_positions)
+    # 若被告只有一人，法條全部灌給他
+    if len(name_list)==1:
+        for key, law_list in fullname_law_dict.items():
+            name_and_law[name_list[0]].extend(law_list)
+        for name in name_list:
+            name_and_law[name] = list(set(name_and_law[name]))
+        return name_and_law
     # 所有的位置
     all_positions_dict, all_positions_list = find_all_positions_dict_and_list(
-        name_all_positions, law_all_positions)
+        all_name_positions, all_law_positions)
 
     temp_name_list = []
     temp_law_list = []
+    temp_law_positions_list = []
     last_flag = ""
     current_flag = ""
+    law_position = -1
     for i, position in enumerate(all_positions_list):
         # 紀錄目前的是找被告還是法條
         current_flag = get_key(all_positions_dict, position)
 
         # 如果是找被告而且上一個flag不是法條
         if current_flag == "name" and last_flag != "law":
-            name = get_key(name_all_positions, position)
+            name = get_key(all_name_positions, position)
             temp_name_list.append(name)
         elif current_flag == "law":
-            law = get_key(law_all_positions, position)
+            law = get_key(all_law_positions, position)
             temp_law_list.append(law)
-
+            temp_law_positions_list.append(position)
         # 如果上一個是法條，現在是被告的話，要把法條加進來
         if (last_flag == "law" and current_flag == "name") or (i+1 == len(all_positions_list)):
             for temp_name in temp_name_list:
-                for temp_law in temp_law_list:
-                    name_and_law[temp_name].append(temp_law)
+                for temp_law_position in temp_law_positions_list:
+                    name_and_law[temp_name].extend(
+                        fullname_law_dict[temp_law_position])
+                # for temp_law in temp_law_list:
+                #     name_and_law[temp_name].append(temp_law)
             # 清空完後，要把剛剛的name 加進來
             temp_name_list.clear()
             temp_law_list.clear()
-            name = get_key(name_all_positions, position)
+            temp_law_positions_list.clear()
+            name = get_key(all_name_positions, position)
             temp_name_list.append(name)
-
+        
         # 紀錄flag
         last_flag = current_flag
+        
 
     # 以逗號分割
     # SFact_list = SFact.split("，")
@@ -75,46 +89,154 @@ def match_name_and_law(text, name_list, break_line='\r\n'):
     #                     name_and_law[name].extend(SPA_list)
     #     # 去除重複
     #     name_and_law[name] = list(set(name_and_law[name]))
+    for name in name_list:
+        name_and_law[name] = list(set(name_and_law[name]))
     return name_and_law
 
 
 # 用來找完整的法條(包含款、項、條)
-def find_fullname_law(text, law_all_positions):
+def find_fullname_law(text, all_law_positions):
 
     regex_subparagraph = "第\d*款"
     regex_paragraph = "第\d*項"
     regex_article = "第\d*條"
     # key , value 轉換
-    law_all_positions_dict = {}
-    law_all_positions_dict = exchange_key_value(law_all_positions)
+    all_law_positions_dict = {}
+    all_law_positions_dict = exchange_key_value(all_law_positions)
     # 取出法律名稱的位置並大到小排列(從後往前排列)
-    law_all_positions_list = sorted(law_all_positions_dict, reverse=True)
-    subparagraph_positions_dict, subparagraph_all_positions_list = find_article_paragraph_subparagraph_positions(
+    all_law_positions_list = sorted(all_law_positions_dict, reverse=True)
+    subparagraph_positions_dict, all_subparagraph_positions_list = find_article_paragraph_subparagraph_positions(
         text, regex_subparagraph)
-    paragraph_positions_dict, paragraph_all_positions_list = find_article_paragraph_subparagraph_positions(
+    paragraph_positions_dict, all_paragraph_positions_list = find_article_paragraph_subparagraph_positions(
         text, regex_paragraph)
-    article_positions_dict, article_all_positions_list = find_article_paragraph_subparagraph_positions(
+    article_positions_dict, all_article_positions_list = find_article_paragraph_subparagraph_positions(
         text, regex_article)
-    # 用款找到對應的項
-    # key 是位置
-    for law_position in law_all_positions_list:
-        # 條
-        try:
-            for article_position in article_all_positions_list:
-                # 項
-                for paragraph_position in paragraph_all_positions_list:
-                    # 款
-                    subparagraph_count = 0
-                    for subparagraph_position in subparagraph_all_positions_list:
-                        subparagraph_count += 1
-                        if paragraph_position < subparagraph_position:
-                            temp_fullname_law=subparagraph_positions_dict[paragraph_position]+subparagraph_positions_dict[subparagraph_position]
-                            
-                        if subparagraph_count == len(subparagraph_all_positions_list):
-                            raise getoutofloop
-        except getoutofloop:
-            pass
-    print()
+    # init object
+    law_article_para_subpara_positions_dict={}
+    kind_list=["law","article","paragraph","subparagraph"]
+    fullname_law_dict = {}
+    for law_position in all_law_positions_list:
+        fullname_law_dict[law_position]=[]
+    for kind in kind_list:
+        law_article_para_subpara_positions_dict[kind] = []
+        if kind=="law":
+            law_article_para_subpara_positions_dict[kind] = all_law_positions_list
+        elif kind == "article":
+            law_article_para_subpara_positions_dict[kind] = all_article_positions_list
+        elif kind == "paragraph":
+            law_article_para_subpara_positions_dict[kind] = all_paragraph_positions_list
+        elif kind == "subparagraph":
+            law_article_para_subpara_positions_dict[kind] = all_subparagraph_positions_list
+    # 
+    law_article_para_subpara_positions_list = get_extend_list(
+        all_law_positions_list, all_article_positions_list, all_paragraph_positions_list, all_subparagraph_positions_list)
+    last_flag = ""
+    current_flag = ""
+    next_flag=""
+    temp_article_name_list=[]
+    temp_paragraph_name_list = []
+    temp_subparagraph_name_list = []
+    fullname_law_list = []
+    
+    law_name_position=0
+    for i, position in enumerate(law_article_para_subpara_positions_list):
+        # 紀錄目前的是找法、條、項、款
+        current_flag = get_key(
+            law_article_para_subpara_positions_dict, position)
+        
+        if current_flag == "law":
+           law_name = get_key(all_law_positions, position)
+           law_name_position=position
+        elif current_flag=="article":
+            temp_article_name_list.append(article_positions_dict[position])
+            temp_article_name_list = list(set(temp_article_name_list))
+        elif current_flag == "paragraph":
+            temp_paragraph_name_list.append(paragraph_positions_dict[position])
+        elif current_flag == "subparagraph":
+            temp_subparagraph_name_list.append(
+                subparagraph_positions_dict[position])
+
+        if i+1 < len(law_article_para_subpara_positions_list):
+            next_flag = get_key(
+                law_article_para_subpara_positions_dict, law_article_para_subpara_positions_list[i+1])
+        # 若下一個next_flag 是law 或者 已經到最後一個了
+        # 開始組完整的法律名稱
+        if (current_flag==next_flag)or (current_flag == "paragraph" and next_flag == "article") or (current_flag == "subparagraph" and next_flag == "paragraph") or (next_flag == "law") or (i+1 == len(law_article_para_subpara_positions_list)):
+            if len(temp_subparagraph_name_list) > 0 and len(temp_paragraph_name_list) > 0 and len(temp_article_name_list) > 0:
+                for temp_article_name in temp_article_name_list:
+                    for temp_paragraph_name in temp_paragraph_name_list:
+                         for temp_subparagraph_name in temp_subparagraph_name_list:
+                            fullname_law_list.append(
+                                law_name+temp_article_name+temp_paragraph_name+temp_subparagraph_name) 
+                            fullname_law_dict[law_name_position].append(
+                                law_name+temp_article_name+temp_paragraph_name+temp_subparagraph_name)
+            elif len(temp_paragraph_name_list) > 0 and len(temp_article_name_list) > 0:
+                for temp_article_name in temp_article_name_list:
+                    for temp_paragraph_name in temp_paragraph_name_list:
+                            fullname_law_list.append(
+                                law_name+temp_article_name+temp_paragraph_name)
+                            fullname_law_dict[law_name_position].append(
+                                law_name+temp_article_name+temp_paragraph_name)
+            elif len(temp_article_name_list) > 0:
+                for temp_article_name in temp_article_name_list:
+                    fullname_law_list.append(law_name+temp_article_name)
+                    fullname_law_dict[law_name_position].append(
+                        law_name+temp_article_name)
+        # 如果由"款"轉換"項" 代表 "條" 要留下
+        if (current_flag == "subparagraph" and next_flag == "paragraph"):
+            temp_paragraph_name_list.clear()
+            temp_subparagraph_name_list.clear()
+        # 如果由"項"轉換"條" 代表 "法" 要留下
+        if (current_flag == "paragraph" and next_flag == "article") or next_flag=="law":
+            temp_paragraph_name_list.clear()
+            temp_subparagraph_name_list.clear()
+            temp_article_name_list.clear()
+        # 如果跟下一個 flag 一樣
+        if (current_flag==next_flag):
+            if(current_flag=="article"):
+                temp_article_name_list.clear()
+            elif(current_flag == "paragraph"):
+                temp_paragraph_name_list.clear()
+            elif(current_flag == "subparagraph"):
+                temp_subparagraph_name_list.clear()
+
+
+        # 如果由 "條"
+        # 紀錄flag
+        last_flag = current_flag
+    # print(fullname_law_list)
+    # print(fullname_law_dict)
+    return fullname_law_dict
+    # # 用款找到對應的項
+    # law_delete_list=[]
+    # article_delete_list = []
+    # paragraph_delete_list = []
+    # subparagraph_delete_list=[]
+    # # key 是位置 
+    # # while len(law_all_positions_list)>0:
+    # for law_position in law_all_positions_list:
+    #     # 條
+    #     for article_position in article_all_positions_list:
+    #         # 項
+    #         for paragraph_position in paragraph_all_positions_list:
+    #             if article_position < paragraph_position:
+    #                 # 代表 "項" 有找到對應的 
+    #                 paragraph_delete_list.append(paragraph_position)
+    #             # 款
+    #             for subparagraph_position in subparagraph_all_positions_list:
+    #                 if paragraph_position < subparagraph_position:
+    #                     # 代表"款"有找到對應的"項"
+    #                     subparagraph_delete_list.append(
+    #                         subparagraph_position)
+    #                     temp_fullname_law = law_all_positions_dict[law_position] + article_positions_dict[article_position] + paragraph_positions_dict[paragraph_position] + \
+    #                         subparagraph_positions_dict[subparagraph_position]
+    #                     print(temp_fullname_law)
+    #             # 刪除 有對應到"項" 的 "款"
+    #         #     for key in subparagraph_delete_list:
+    #         #         subparagraph_all_positions_list.remove(key)
+    #         #     subparagraph_delete_list.clear()
+    #         # for key in paragraph_delete_list:
+    #         #     subparagraph_all_positions_list.remove(key)
 
 
 def exchange_key_value(a_dict):
@@ -279,15 +401,15 @@ def find_article_paragraph_subparagraph_positions(text, regex_str):
     return regex_positions_dict, all_positions_list
 
 
-def find_all_positions_dict_and_list(name_all_positions, law_all_positions):
+def find_all_positions_dict_and_list(all_name_positions, all_law_positions):
     all_positions_dict = {}
     all_positions_dict["name"] = []
     all_positions_dict["law"] = []
     all_positions_list = []
-    for name, position_list in name_all_positions.items():
+    for name, position_list in all_name_positions.items():
         all_positions_dict["name"].extend(position_list)
         all_positions_list.extend(position_list)
-    for name, position_list in law_all_positions.items():
+    for name, position_list in all_law_positions.items():
         all_positions_dict["law"].extend(position_list)
         all_positions_list.extend(position_list)
     # 排列
@@ -300,6 +422,15 @@ def get_key(dict, value):
         if value in v_list:
             return k
 
+def get_extend_list(
+    all_law_positions_list, all_article_positions_list, all_paragraph_positions_list, all_subparagraph_positions_list):
 
+    extend_list=[]
+    extend_list.extend(all_law_positions_list)
+    extend_list.extend(all_article_positions_list)
+    extend_list.extend(all_paragraph_positions_list)
+    extend_list.extend(all_subparagraph_positions_list)
+
+    return sorted(extend_list)
 class getoutofloop(Exception):
     pass
