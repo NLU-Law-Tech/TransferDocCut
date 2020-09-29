@@ -18,6 +18,8 @@ def match_name_and_law(text, name_list, break_line='\r\n'):
         all_law_positions[focus_law] = []
 
     # 清洗Text
+    split_str="[_LAW]"
+    text = text.split(split_str)[-1]
     text = clean_text(text, break_line)
     # 找出被告跟foucus_law在Text所有的位置
     all_name_positions = find_string_all_positions(
