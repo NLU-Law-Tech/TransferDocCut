@@ -43,6 +43,11 @@ def get_all_laws_list():
                      '保險法', '證券投資信託及顧問法', '證券投資人及期貨交易人保護法', '刑法']
     return all_laws_list
 
+def get_blacklist_law_list():
+    # 取得黑名單法條的名稱
+    blacklist_law_list=["刑事訴訟法"]
+
+    return blacklist_law_list
 
 def clean_data(dirty_law, break_line):
     # 資料清洗

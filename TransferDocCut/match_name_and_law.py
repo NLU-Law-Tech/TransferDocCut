@@ -1,7 +1,7 @@
 import re
 from TransferDocCut.find_laws import find_laws
 from TransferDocCut.find_laws import get_all_laws_list
-
+from TransferDocCut.find_laws import get_blacklist_law_list
 
 def match_name_and_law(text, name_list, break_line='\r\n'):
     # 取出執掌法條
@@ -113,9 +113,16 @@ def find_fullname_law(text, all_law_positions):
         text, regex_paragraph)
     article_positions_dict, all_article_positions_list = find_article_paragraph_subparagraph_positions(
         text, regex_article)
+    # 找黑名單法條
+    # 避免以下狀況發生
+    # 政府採購法第87條第3項......依刑事訴訟法第251條第1項...
+    # 政府採購法第87條第3項,政府採購法第251條第1項
+    blacklaw_list=get_blacklist_law_list()
+    blacklaw_positions_dict, all_blacklaw_positions_list = find_blacklaw_positions(
+        text, blacklaw_list)
     # init object
     law_article_para_subpara_positions_dict={}
-    kind_list=["law","article","paragraph","subparagraph"]
+    kind_list=["law","article","paragraph","subparagraph","blacklaw"]
     fullname_law_dict = {}
     for law_position in all_law_positions_list:
         fullname_law_dict[law_position]=[]
@@ -129,9 +136,11 @@ def find_fullname_law(text, all_law_positions):
             law_article_para_subpara_positions_dict[kind] = all_paragraph_positions_list
         elif kind == "subparagraph":
             law_article_para_subpara_positions_dict[kind] = all_subparagraph_positions_list
+        elif kind == "blacklaw":
+            law_article_para_subpara_positions_dict[kind] = all_blacklaw_positions_list
     # 
     law_article_para_subpara_positions_list = get_extend_list(
-        all_law_positions_list, all_article_positions_list, all_paragraph_positions_list, all_subparagraph_positions_list)
+        all_law_positions_list, all_article_positions_list, all_paragraph_positions_list, all_subparagraph_positions_list, all_blacklaw_positions_list)
     last_flag = ""
     current_flag = ""
     next_flag=""
@@ -139,7 +148,8 @@ def find_fullname_law(text, all_law_positions):
     temp_paragraph_name_list = []
     temp_subparagraph_name_list = []
     fullname_law_list = []
-    
+    # pass_flag 用來跳過blacklaw的條項款
+    pass_flag=False
     law_name_position=0
     for i, position in enumerate(law_article_para_subpara_positions_list):
         # 紀錄目前的是找法、條、項、款
@@ -149,15 +159,18 @@ def find_fullname_law(text, all_law_positions):
         if current_flag == "law":
            law_name = get_key(all_law_positions, position)
            law_name_position=position
-        elif current_flag=="article":
+           pass_flag=False
+        elif current_flag == "article" and pass_flag==False:
             temp_article_name_list.append(article_positions_dict[position])
             temp_article_name_list = list(set(temp_article_name_list))
-        elif current_flag == "paragraph":
+        elif current_flag == "paragraph"and pass_flag == False:
             temp_paragraph_name_list.append(paragraph_positions_dict[position])
-        elif current_flag == "subparagraph":
+        elif current_flag == "subparagraph"and pass_flag == False:
             temp_subparagraph_name_list.append(
                 subparagraph_positions_dict[position])
-
+        elif current_flag == "blacklaw":
+            pass_flag=True
+            continue
         if i+1 < len(law_article_para_subpara_positions_list):
             next_flag = get_key(
                 law_article_para_subpara_positions_dict, law_article_para_subpara_positions_list[i+1])
@@ -390,8 +403,6 @@ def find_string_all_positions(text, string_list, string_dict):
     return string_dict
 
 # 找條項款的位置(包含同條、同項)
-
-
 def find_article_paragraph_subparagraph_positions(text, regex_str):
     regex_positions_dict = {}
     regex_positions = re.finditer(regex_str, text)
@@ -402,6 +413,17 @@ def find_article_paragraph_subparagraph_positions(text, regex_str):
     all_positions_list = sorted(regex_positions_dict, reverse=True)
     return regex_positions_dict, all_positions_list
 
+
+def find_blacklaw_positions(text, blacklaw_list):
+    regex_positions_dict = {}
+    for blacklaw in blacklaw_list:
+        regex_positions = re.finditer(blacklaw, text)
+        for regex_position in regex_positions:
+            # 位置當key
+            regex_positions_dict[regex_position.start()] = regex_position[0]
+    # 再回傳由大到小的位置(由後往前)
+    all_positions_list = sorted(regex_positions_dict, reverse=True)
+    return regex_positions_dict, all_positions_list
 
 def find_all_positions_dict_and_list(all_name_positions, all_law_positions):
     all_positions_dict = {}
@@ -425,14 +447,18 @@ def get_key(dict, value):
             return k
 
 def get_extend_list(
-    all_law_positions_list, all_article_positions_list, all_paragraph_positions_list, all_subparagraph_positions_list):
+        all_law_positions_list, all_article_positions_list, all_paragraph_positions_list, all_subparagraph_positions_list, all_blacklaw_positions_list):
 
     extend_list=[]
     extend_list.extend(all_law_positions_list)
     extend_list.extend(all_article_positions_list)
     extend_list.extend(all_paragraph_positions_list)
     extend_list.extend(all_subparagraph_positions_list)
-
+    extend_list.extend(all_blacklaw_positions_list)
     return sorted(extend_list)
+
+def get_blacklist_law_position(text):
+    blacklist_law_list=get_blacklist_law_list()
+
 class getoutofloop(Exception):
     pass
