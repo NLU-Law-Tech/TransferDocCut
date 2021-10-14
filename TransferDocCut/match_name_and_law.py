@@ -98,7 +98,7 @@ def match_name_and_law(text, name_list, break_line='\r\n'):
 
 # 用來找完整的法條(包含款、項、條)
 def find_fullname_law(text, all_law_positions):
-
+    if len(all_law_positions) == 0: return {};
     regex_subparagraph = "第\d*款"
     regex_paragraph = "第\d*項"
     regex_article = "第\d*條"
